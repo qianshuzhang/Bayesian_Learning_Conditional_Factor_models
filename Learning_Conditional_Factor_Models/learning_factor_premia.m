@@ -1,0 +1,263 @@
+clc;
+clear;
+
+%% Data simulation or data loading
+
+sim = 1;       % 1, using simulated data
+
+if sim == 1
+   
+    T = 5000;
+    
+    % number of factors/ number of covariance 
+    n_factors = 3;
+    % params.mu     = [0.10/252;0.15/252]; 
+    % params.omega = [0.025/252;0.04/252];
+    % params.alpha = [0.02;0.04];
+    % params.beta = [0.950;0.8];
+    % annualized mean is 10%
+    % n=3
+    params.mu     = [0.10/252;0.15/252;0.2/252]; 
+    params.omega = [0.025/252;0.04/252;0.01/252];
+    params.alpha = [0.02;0.04;0.03];
+    params.beta = [0.950;0.8;0.6];
+    
+    % 协方差矩阵分解A^{-1}
+    % params.A = [1,0;0.2,1];
+    params.A = [1,0,0;0.2,1,0;0.1,0.05,1];
+    lower_tri_elements = params.A(tril(true(size(params.A)), -1))';
+    params.A_lower = lower_tri_elements;
+    
+
+    % 还原下三角矩阵
+    % 创建全零矩阵
+    % M = zeros(n); % n维
+    % 
+    % % 使用逻辑索引将下三角元素填充回去
+    % M(tril(true(n), -1)) = lower_tri_elements;
+    % 
+    % % 将对角线元素设置为1
+    % M = M + eye(n);
+    
+    % % jump size parameters
+    % params.theta  = -0.02;     params.sigma  = 0.010; 
+    % % diffusion volatility
+    % params.omega1 = 1e-10;     params.beta1  = 0.950;   params.alpha1 = 2.2e-3;
+    % params.delta1 = 0.030;     params.gamma1 = 0.01;
+    % % jump intensity
+    % params.omega2 = 1e-8;      params.beta2  = 0.950;   params.alpha2 = 5.0e-4;
+    % params.delta2 = 2.8e-3;    params.gamma2 = 0.100;
+    
+    % V0 = [0.025/252;0.04/252];
+    V0 = [0.025/252;0.04/252;0.01/252];
+    
+    [Ret, V] = ModelSim(params, V0, T,n_factors);
+    
+%     figure(1)
+%     subplot(3, 1, 1), plot(Ret)
+%     subplot(3, 1, 2), plot(J.y)
+%     subplot(3, 1, 3), plot(J.n)
+%     
+%     figure(2)
+    %     subplot(2, 1, 1), plot(sqrt(V.h1))
+    %     subplot(2, 1, 2), plot(V.h2)
+    %     
+    else
+        n_factors = 2;
+        % load('Y');
+        % T = size(Y, 2);
+        filename = "D:\Dropbox\qs\Bayesian_Learning_Factor_Models\Data\Factors_FF6_q5_monthly.xls";
+        data = readtable(filename);
+        array = table2array(data);
+        Ret = array(:,2:3);
+        T = size(Ret,1);
+
+        
+    end
+    
+    %% ------------implement Online Learning-----------------------------------
+    % -------------------------------------------------------------------------
+    %particle numbers
+    % Nparam = 1000;
+    
+    % Parameters need to be estimated:
+    % [delta,theta,alpha0z,alpha1z,beta1z,gammaz,
+    % alpha0y,alpha1y,beta1y,gammay,lambdaz,lambday];
+    % params_all = [params.mu', params.omega', params.alpha', params.beta'];   
+    % 
+    % X = repmat(params_all, Nparam, 1);
+    % 
+    % States.h = [0.025/252 * ones(Nparam, 1),0.04/252* ones(Nparam, 1)];
+    % 
+    % States.e  = sqrt(States.h).*randn(Nparam, 1);
+    
+    
+    % %%
+    % h = [];
+    % for t = 1:T
+    % 
+    %     t
+    % 
+    %     [l(:,t), States] = filtering_llh(Ret(t), X, States);
+    % 
+    %     h = [h; mean(States.h)];
+    % 
+    % end
+    % 
+    % figure(1), plot(sum(l')/T)
+    % figure(2), plot(h), hold on, plot(V.h, 'r')
+    % %figure(3), plot(h2), hold on, plot(V.h2, 'r')
+    
+    %% 
+    
+    Nparam    = 1000;
+    ESS_Bound = Nparam/2;
+    
+    % Parameters need to be estimated:
+    % [1.mu, 2.omega, 3.alpha, 4.beta];
+    % among which omega, alpha, beta need to be positive
+    
+    prior_mu.mu = 0.10/252*ones(1,n_factors);
+    prior_mu.omega = 0.025/252*ones(1,n_factors);
+    prior_mu.alpha = 0.02*ones(1,n_factors);
+    prior_mu.beta = 0.95*ones(1,n_factors);
+    prior_mu.A_lower = 0.1*ones(1,(n_factors-1)*n_factors/2);
+    prior_param.mu = [prior_mu.mu,prior_mu.omega,prior_mu.alpha,prior_mu.beta,prior_mu.A_lower];
+
+    prior_sig.mu = 0.08/252*ones(1,n_factors);
+    prior_sig.omega = 0.01/252*ones(1,n_factors);
+    prior_sig.alpha = 0.05*ones(1,n_factors);
+    prior_sig.beta = 1.2*ones(1,n_factors);
+    prior_sig.A_lower = 0.1*ones(1,(n_factors-1)*n_factors/2);
+    prior_param.sig = [prior_sig.mu,prior_sig.omega,prior_sig.alpha,prior_sig.beta,prior_sig.A_lower];
+    
+
+
+    % prior_param.mu  = [0.10/252,0.10/252   , 0.025/252, 0.025/252, 0.02, 0.02, 0.950, 0.950];
+    % 
+    % prior_param.sig = [0.08/252,0.08/252, 0.01/252, 0.01/252, 0.05, 0.05, 1.2, 1.2];
+    
+    % simulate from the prior of the fixed params
+    X = PriorSim(prior_param, Nparam,n_factors);
+    
+    lnpdf_prior  = PriorLogl(X, prior_param,n_factors);
+    
+    l   = zeros(Nparam, 1);
+    lnw = zeros(Nparam, 1);
+    
+    
+    t = 1; 
+    
+    %initial values of volatilities
+    % initial_h = [0.025/252 * ones(Nparam, 1),0.04/252* ones(Nparam, 1)];
+    initial_h = [0.025/252 * ones(Nparam, 1),0.04/252* ones(Nparam, 1),0.01/252*ones(Nparam, 1)];
+    States.h = initial_h;
+    
+    States.e  = sqrt(States.h).*randn(Nparam, n_factors);
+    
+    %initialize statistics structure
+    Statistics.ESS = [];
+    Statistics.normfac = [];
+    
+    % will store posterior mean of dynamic quantities
+    Statistics.DS_m     = [];
+    Statistics.DS_prc5  = [];
+    Statistics.DS_prc95 = [];
+    
+    % will store posterior mean and 5,95 percentiles for fixed parameters
+    Statistics.Xm      = [];
+    Statistics.X_prc5  = [];
+    Statistics.X_prc95 = [];
+    
+    % volatility forecasting
+    Statistics.EVm = [];
+    
+    % counter of move steps
+    movecounter = 0;
+    
+    % structure to store runtime of processing steps
+    Runtime.Process_t = [1];
+    Runtime.Process_runtime = [0];
+    
+    starttime = tic;
+    Runtime.total_runtime = toc(starttime);
+    
+    Tpred = 7;
+
+%% start looping
+while (t <= T)
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % process new observations %
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    tic
+    
+    [l, lnw, t, States, Statistics] = ProcessNewobs(X, l, lnw, t, States, Statistics, Ret, Tpred,n_factors);
+    
+    proctime = toc;
+    
+    Runtime.Process_t = [Runtime.Process_t, t];
+    
+    Runtime.Process_runtime = [Runtime.Process_runtime, proctime];
+    
+    avg_time = Runtime.Process_runtime(end)/(Runtime.Process_t(end) - Runtime.Process_t(end-1));
+    
+    disp(' ');
+    
+    disp(['Observations ' num2str(Runtime.Process_t(end-1)) '-' num2str(Runtime.Process_t(end))...
+          ' are processed, at per observation time of ' num2str(avg_time) ' sec' ]);
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % resample and move if necessary %
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    if Statistics.ESS(end) < 0.5*Nparam
+        
+        disp(' ');
+        disp(['Resample and move at ' num2str(t)]);
+        
+        %%%%%%%%%%%%
+        % Resample %
+        %%%%%%%%%%%%
+        
+        [X, lnw, l, States, lnpdf_prior] = ResampleSet(X, lnw, l, States, lnpdf_prior,n_factors);
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % while unique particles are less than 0.5*Nparam, move %
+        % using a mixture normal independent proposal                   %
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        
+        counter = 0;
+        
+        while or(counter == 0, size(unique(X, 'rows'), 1) < 0.5*Nparam)
+            
+            counter = counter + 1;
+            
+            movecounter = movecounter + 1; Moves.t(movecounter) = t;
+            
+            tic
+            
+            [X, States, l, lnpdf_prior, Moves.AcceptRate(movecounter)] = ...
+                    MoveSet(X, States, l, lnpdf_prior, prior_param, Ret(1:t,:),initial_h,n_factors);
+            
+            Moves.Runtime(movecounter) = toc;
+            
+            disp(' ');
+            
+            disp( ['Move number ' num2str(counter) ' at t=' num2str(t) ' took ' num2str(Moves.Runtime(movecounter)) ' sec']);
+            
+            disp(['unique X after move number ' num2str(counter) ' : ' num2str(size(unique(X,'rows'),1))]); 
+        end
+    end
+
+end
+
+
+
+%{
+
+%}
+
+
+
+
